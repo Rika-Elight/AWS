@@ -1,5 +1,5 @@
 template-file-path: './Template/CreateAutoscalingAlarms.yaml'
-Parameters:
+parameters:
   ProjectName: CF
   Environment: Dev
   SNSTopicNameCritical: arn:aws:sns:ap-south-1:317185619046:CF-Dev-test
