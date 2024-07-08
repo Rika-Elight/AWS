@@ -1,0 +1,742 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'This Template will create ASG and ALB Alarms '
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Provide the Project Name and Environment for the tags"
+        Parameters:
+          - ProjectName
+          - Environment
+      
+      - Label:
+          default: "Provide the sns topic arn"
+        Parameters:
+          - SNSTopicNameCritical
+          - SNSTopicARNWarning
+          - SNSTopicNameLow
+
+      - Label:
+          default: "ASG Alarms Configuration"
+        Parameters:
+          - AutoScalingGroupName
+          - PolicyType
+          - ASGCPUThreshold
+          - ASGCPULowThreshold 
+          - ASGCPUCriticalThreshold
+          - ASGMemThreshold
+          - ASGMemCriticalThreshold
+          - AsgDiskWarningThreshold
+          - AsgDiskCriticalThreshold
+          - WantNetworkAlarms
+          - ASGNetworkInWarningThreshold
+
+      - Label:
+          default: "ALB Alarms Configuration"
+        Parameters:
+          - LoadBalancerName
+          - ALBRequestCounts
+          - ALBTargetResponseTimeThreshold
+          - ALB5XXWarningThreshold
+          - ALB5XXCriticalThreshold
+          - ALB5XXTargetWarningThreshold
+          - ALB5XXTargetCriticalThreshold
+          - ALB4XXWarningThreshold
+          - ALB4XXCriticalThreshold
+          - ALB4XXTargetWarningThreshold
+          - ALB4XXTargetCriticalThreshold 
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Provide the Project Name.
+  Environment: 
+    Type: String
+    Description: Provide the Environment Name.
+    AllowedValues:
+      - Development
+      - Staging
+      - Production
+  AutoScalingGroupName: 
+    Type: String
+    Description: Enter the name of Auto Scaling Group
+  ASGCPUThreshold: 
+    Type: String
+    Default: '50.0'
+    Description: Enter the Warning CPU Utilization Threshold for the ASG Instance.
+  ASGCPULowThreshold:
+    Type: String
+    Default: '70.0' 
+    Description: Enter the CPU low threshold value for ASG to scale down
+  ASGMemThreshold: 
+    Type: String
+    Description: Enter the Warning Memory Utilization Threshold for the ASG Instance.
+    Default: '50.0'
+  ASGMemCriticalThreshold:
+    Description: Enter the Critical Memory Utilization Threshold for the ASG Instance.
+    Default: '90.0'
+    Type: String
+  ASGCPUCriticalThreshold:
+    Description: Enter the Critical CPU Utilization Threshold for the ASG Instance.
+    Default: '90.0'
+    Type: String
+  AsgDiskCriticalThreshold:
+    Description: Enter the ASG Disk usage critical threshold 
+    Default: '90.0'
+    Type: String
+  AsgDiskWarningThreshold:
+    Description: Enter the ASG Disk usage warning threshold 
+    Default: '50'
+    Type: String
+  LoadBalancerName:
+    Type: String
+    Description: Enter the Application Load Balancer Name.
+  ALBTargetResponseTimeThreshold:
+    Type: String
+    Description: Enter the time elapsed, in seconds, after the request leaves the load balancer until a response from the target is received.
+    Default: 5
+  ALBRequestCounts: 
+    Type: String
+    Description: Enter the Total Number of Request Count Threshold
+    Default: 100
+  ALB5XXWarningThreshold:
+    Type: String
+    Description: Enter the number of Warning HTTP 5XX server error codes that originate from the load balancer.
+    Default: 5
+  ALB5XXCriticalThreshold:
+    Type: String
+    Description: Enter the number of Critical HTTP 5XX server error codes that originate from the load balancer.
+    Default: 10
+  ALB5XXTargetWarningThreshold:
+    Type: String
+    Description: Enter the number of Warning HTTP 5XX server error codes that originate from the Target instances.
+    Default: 5
+  ALB5XXTargetCriticalThreshold:
+    Type: String
+    Description: Enter the number of Critical HTTP 5XX server error codes that originate from the Target instances. 
+    Default: 10
+  ALB4XXWarningThreshold:
+    Type: String
+    Description: Enter the number of Warning  HTTP 4XX client error codes that originate from the load balancer.
+    Default: 5
+  ALB4XXCriticalThreshold:
+    Type: String
+    Description: Enter the number of Critical HTTP 4XX client error codes that originate from the load balancer.
+    Default: 10
+  ALB4XXTargetWarningThreshold:
+    Type: String
+    Description: Enter the number of Warning HTTP 4XX client error codes that originate from the Target instances.
+    Default: 5
+  ALB4XXTargetCriticalThreshold:
+    Type: String
+    Description: Enter the number of Critical HTTP 4XX client error codes that originate from the Target instances.
+    Default: 10
+  SNSTopicNameCritical: 
+    Type: String
+    Description: Enter  the SNS Topic Name for sending critical alarms(Provide the arn of the topic). 
+  SNSTopicARNWarning:
+    Type: String
+    Description: Enter  the SNS Topic Name for sending warning alarms(Provide the arn of the topic).  
+  SNSTopicNameLow:
+    Type: String
+    Description: Enter  the SNS Topic Name for sending warning alarms(Provide the arn of the topic).
+  PolicyType:
+    Type: String
+    Description: Select the type of scaling Policy you need for Auto Scaling group
+    AllowedValues:
+     - 'StepScaling'
+     - 'TargetTracking'
+  WantNetworkAlarms:
+    Type: String
+    Description: Want network alarms ?
+    Default: No
+    AllowedValues:
+     - "Yes"
+     - "No"
+  ASGNetworkInWarningThreshold:
+    Type: Number
+    Description: Enter the Network In Warning Threshold in Bytes
+    Default: 50000000
+  
+
+Conditions:
+    TargetScalingPolicy: !Equals [ !Ref PolicyType , 'TargetTracking']   
+    StepScalingPolicy: !Equals [ !Ref PolicyType, 'StepScaling']
+    WantNetworkAlarms: !Equals [ !Ref WantNetworkAlarms, "Yes"]
+
+Resources:
+  ASGCPUHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-CPU-HIGH-WARNING'
+      AlarmDescription: !Sub '${AutoScalingGroupName} CPU Utilization is greater than ${ASGCPUThreshold} for 5 minutes '
+      AlarmActions: 
+        - !Ref SNSTopicARNWarning
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold: 
+        Ref: ASGCPUThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Average
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-CPU-HIGH-WARNING'
+
+  ASGCPUCriticalAlarm1:
+    Type: 'AWS::CloudWatch::Alarm'
+    Condition: TargetScalingPolicy
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-CPU-CRITICAL'
+      AlarmDescription: !Sub '${AutoScalingGroupName} CPU Utilization is greater than ${ASGCPUCriticalThreshold} for 5 minutes '
+      AlarmActions: 
+        - !Ref SNSTopicNameCritical
+        # - !ImportValue SNSTopicNameCritical
+        - !Ref ASGScalingPolicyCpuUtilization
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold: 
+        Ref: ASGCPUCriticalThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Average
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-CPU-CRITICAL'
+      
+  ASGCPULowAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Condition: StepScalingPolicy
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-CPU-LOW'
+      AlarmDescription: !Sub '${AutoScalingGroupName} CPU Utilization is less than ${ASGCPULowThreshold} for 5 minutes '
+      AlarmActions: 
+        - !Ref SNSTopicNameLow
+        - !Ref ASGDownPolicyCPUUtilization
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold: 
+        Ref: ASGCPULowThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: LessThanOrEqualToThreshold
+      Statistic: Average
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-CPU-LOW'
+
+#if condition for target scaling
+  ASGCPUCriticalAlarm2:
+    Type: 'AWS::CloudWatch::Alarm'
+    Condition: StepScalingPolicy
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-CPU-CRITICAL'
+      AlarmDescription: !Sub '${AutoScalingGroupName} CPU Utilization is greater than ${ASGCPUCriticalThreshold} for 5 minutes '
+      AlarmActions: 
+        - !Ref ASGUpPolicyCPUUtilization
+        - !Ref SNSTopicNameCritical
+        # - !ImportValue SNSTopicNameCritical
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold: 
+        Ref: ASGCPUCriticalThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Average
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-CPU-CRITICAL'
+
+  ASGMEMCriticalAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-MEMORY-CRITICAL'
+      AlarmDescription: !Sub '${AutoScalingGroupName} Memory Utilization is greater than ${ASGMemCriticalThreshold} for 5 minutes '
+      AlarmActions: 
+        - !Ref SNSTopicNameCritical
+        # - !ImportValue SNSTopicNameCritical
+      MetricName: mem_used_percent
+      Namespace: CWAgent
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold: 
+        Ref: ASGMemCriticalThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Average
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-MEMORY-CRITICAL'
+
+  ASGDiskCriticalAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-DISK-CRITICAL'
+      AlarmDescription: !Sub '${AutoScalingGroupName} Disk Utilization is greater than ${AsgDiskCriticalThreshold} for 5 minutes '
+      AlarmActions: 
+        - !Ref SNSTopicNameCritical
+        # - !ImportValue SNSTopicNameCritical
+      MetricName: disk_used_percent
+      Namespace: CWAgent
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold: 
+        Ref: AsgDiskCriticalThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Average
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-DISK-CRITICAL'
+
+  ASGDiskWarningAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-DISK-WARNING'
+      AlarmDescription: !Sub '${AutoScalingGroupName} Disk Utilization is greater than ${AsgDiskWarningThreshold} for 5 minutes '
+      AlarmActions: 
+        - !Ref SNSTopicARNWarning
+      MetricName: disk_used_percent
+      Namespace: CWAgent
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold: 
+        Ref: AsgDiskWarningThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Average
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-DISK-WARNING'
+
+  ASGMEMHighAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-MEMORY-HIGH-WARNING'
+      AlarmDescription: !Sub '${AutoScalingGroupName} Memory Utilization is greater than ${ASGMemThreshold} for 5 minutes '
+      AlarmActions: 
+        - !Ref SNSTopicARNWarning
+      MetricName: mem_used_percent
+      Namespace: CWAgent
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold: 
+        Ref: ASGMemThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Average
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-MEMORY-HIGH-WARNING'
+
+  ASGStatusCheckAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-STATUSCHECK-ALARM'
+      AlarmDescription: !Sub '${AutoScalingGroupName} StatusCheck-Failed'
+      AlarmActions: 
+        - !Ref SNSTopicNameCritical
+        # - !ImportValue SNSTopicNameCritical
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '60'
+      DatapointsToAlarm: '1'
+      EvaluationPeriods: '1'
+      Threshold: '1'
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-STATUSCHECK-ALARM'
+
+  ASGStatusCheckInstanceAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-STATUSCHECK-INSTANCE-ALARM'
+      AlarmDescription: !Sub '${AutoScalingGroupName}-StatusCheck-Instance-Failed'
+      AlarmActions: 
+        - !Ref SNSTopicNameCritical
+        # - !ImportValue SNSTopicNameCritical
+      MetricName: StatusCheckFailed_Instance
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '60'
+      DatapointsToAlarm: '1'
+      EvaluationPeriods: '1'
+      Threshold: '1'
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-STATUSCHECK-INSTANCE-ALARM'
+
+  ASGStatusCheckSystemAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-STATUSCHECK-SYSTEM-ALARM'
+      AlarmDescription: !Sub '${AutoScalingGroupName}-StatusCheck-System-Failed'
+      AlarmActions: 
+        - !Ref SNSTopicNameCritical
+        # - !ImportValue SNSTopicNameCritical
+      MetricName: StatusCheckFailed_System
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '60'
+      DatapointsToAlarm: '1'
+      EvaluationPeriods: '1'
+      Threshold: '1'
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-STATUSCHECK-SYSTEM-ALARM'
+
+  ALBRequestCount:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${LoadBalancerName}-REQUEST-COUNT-WARNING-ALARM'
+      AlarmDescription: !Sub '${LoadBalancerName} Request count High at ${ALBRequestCounts}'
+      AlarmActions: 
+        - !Ref SNSTopicARNWarning
+      Namespace: 'AWS/ApplicationELB'
+      MetricName: 'RequestCount'
+      Dimensions: 
+        - Name: LoadBalancer
+          Value: 
+            Ref: LoadBalancerName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ALBRequestCounts
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Sum
+      Unit: Count
+      Tags:
+      - Key: Name
+        Value: !Sub '${LoadBalancerName}-REQUEST-COUNT-WARNING-ALARM'
+
+  ALBLatency:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${LoadBalancerName}-LATENCY-WARNING-ALARM'
+      AlarmDescription: !Sub '${LoadBalancerName} Latency High at ${ALBTargetResponseTimeThreshold}'
+      AlarmActions: 
+        - !Ref SNSTopicARNWarning
+      Namespace: 'AWS/ApplicationELB'
+      MetricName: 'TargetResponseTime'
+      Dimensions: 
+        - Name: LoadBalancer
+          Value: 
+            Ref: LoadBalancerName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ALBTargetResponseTimeThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Average
+      Unit: Seconds
+      Tags:
+      - Key: Name
+        Value: !Sub '${LoadBalancerName}-LATENCY-WARNING-ALARM'
+
+  ALB5XXWarning:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${LoadBalancerName}-5XX-COUNT-HIGH-WARNING-ALARM'
+      AlarmDescription: !Sub '${LoadBalancerName} 5XX Count HIGH at ${ALB5XXWarningThreshold}'
+      AlarmActions: 
+        - !Ref SNSTopicARNWarning
+      Namespace: AWS/ApplicationELB
+      MetricName: 'HTTPCode_ELB_5XX_Count'
+      Dimensions: 
+        - Name: LoadBalancer
+          Value: 
+            Ref: LoadBalancerName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ALB5XXWarningThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Sum
+      Unit: Count
+      Tags:
+      - Key: Name
+        Value: !Sub '${LoadBalancerName}-5XX-COUNT-HIGH-WARNING-ALARM'
+
+  ALB5XXCritical:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${LoadBalancerName}-5XX-COUNT-CRITICAL-ALARM'
+      AlarmDescription: !Sub '${LoadBalancerName} 5XX Count CRITICAL at ${ALB5XXCriticalThreshold}'
+      AlarmActions: 
+        - !Ref SNSTopicNameCritical
+        # - !ImportValue SNSTopicNameCritical
+      Namespace: AWS/ApplicationELB
+      MetricName: 'HTTPCode_ELB_5XX_Count'
+      Dimensions: 
+        - Name: LoadBalancer
+          Value: 
+            Ref: LoadBalancerName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ALB5XXCriticalThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Sum
+      Unit: Count  
+      Tags:
+      - Key: Name
+        Value: !Sub '${LoadBalancerName}-5XX-COUNT-CRITICAL-ALARM'
+
+  ALB5XXTargetWarning:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${LoadBalancerName}-5XXTarget-COUNT-WARNING-ALARM'
+      AlarmDescription: !Sub '${LoadBalancerName} 5XX Target instance Count high ${ALB5XXTargetWarningThreshold}' 
+      AlarmActions: 
+        - !Ref SNSTopicARNWarning
+      Namespace: 'AWS/ApplicationELB'
+      MetricName: 'HTTPCode_Target_5XX_Count'
+      Dimensions: 
+        - Name: LoadBalancer
+          Value: 
+            Ref: LoadBalancerName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ALB5XXTargetWarningThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Sum
+      Unit: Count 
+      Tags:
+      - Key: Name
+        Value: !Sub '${LoadBalancerName}-5XXTarget-COUNT-WARNING-ALARM'
+
+  ALB5XXTargetCritical:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${LoadBalancerName}-5XXTargetf-COUNT-CRITICAL-ALARM'
+      AlarmDescription: !Sub '${LoadBalancerName} 5XX Target instance Count Critical ${ALB5XXTargetCriticalThreshold}' 
+      AlarmActions: 
+        - !Ref SNSTopicNameCritical
+        # - !ImportValue SNSTopicNameCritical
+      Namespace: 'AWS/ApplicationELB'
+      MetricName: 'HTTPCode_Target_5XX_Count'
+      Dimensions: 
+        - Name: LoadBalancer
+          Value: 
+            Ref: LoadBalancerName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ALB5XXTargetCriticalThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Sum
+      Unit: Count 
+      Tags:
+      - Key: Name
+        Value: !Sub '${LoadBalancerName}-5XXTargetf-COUNT-CRITICAL-ALARM'
+
+  ALB4XXWarning:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${LoadBalancerName}-4XX-COUNT-HIGH-WARNING-ALARM'
+      AlarmDescription: !Sub '${LoadBalancerName} 4XX Count HIGH at ${ALB4XXWarningThreshold}' 
+      AlarmActions: 
+        - !Ref SNSTopicARNWarning
+      Namespace: 'AWS/ApplicationELB'
+      MetricName: 'HTTPCode_ELB_4XX_Count'
+      Dimensions: 
+        - Name: LoadBalancer
+          Value: 
+            Ref: LoadBalancerName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ALB4XXWarningThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Sum
+      Unit: Count
+      Tags:
+      - Key: Name
+        Value: !Sub '${LoadBalancerName}-4XX-COUNT-HIGH-WARNING-ALARM'
+
+  ALB4XXCritical:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${LoadBalancerName}-4XX-COUNT-HIGH-CRITICAL-ALARM'
+      AlarmDescription: !Sub '${LoadBalancerName} 4XX Count Critical at ${ALB4XXCriticalThreshold}' 
+      AlarmActions: 
+        - !Ref SNSTopicNameCritical
+        # - !ImportValue SNSTopicNameCritical
+      Namespace: 'AWS/ApplicationELB'
+      MetricName: 'HTTPCode_ELB_4XX_Count'
+      Dimensions: 
+        - Name: LoadBalancer
+          Value: 
+            Ref: LoadBalancerName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ALB4XXCriticalThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Sum
+      Unit: Count  
+      Tags:
+      - Key: Name
+        Value: !Sub '${LoadBalancerName}-4XX-COUNT-HIGH-CRITICAL-ALARM'
+      
+  ALB4XXtargetWarning:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${LoadBalancerName}-4XX-COUNT-TARGET-WARNING-ALARM'
+      AlarmDescription: !Sub '${LoadBalancerName} 4XX target instance WARNING at ${ALB4XXTargetWarningThreshold }'
+      AlarmActions: 
+        - !Ref SNSTopicARNWarning   
+      Namespace: 'AWS/ApplicationELB'
+      MetricName: 'HTTPCode_Target_4XX_Count'
+      Dimensions: 
+        - Name: LoadBalancer
+          Value: 
+            Ref: LoadBalancerName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ALB4XXTargetWarningThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Sum
+      Unit: Count
+      Tags:
+      - Key: Name
+        Value: !Sub '${LoadBalancerName}-4XX-COUNT-TARGET-WARNING-ALARM'
+
+  ALB4XXtargetCritical:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${LoadBalancerName}-4XX-COUNT-TARGET-CRITICAL-ALARM'
+      AlarmDescription: !Sub '${LoadBalancerName} 4XX target instance CRITICAL at ${ALB4XXTargetCriticalThreshold }'
+      AlarmActions: 
+        - !Ref SNSTopicNameCritical   
+        # - !ImportValue SNSTopicNameCritical
+      Namespace: 'AWS/ApplicationELB'
+      MetricName: 'HTTPCode_Target_4XX_Count'
+      Dimensions: 
+        - Name: LoadBalancer
+          Value: 
+            Ref: LoadBalancerName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ALB4XXTargetCriticalThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Sum
+      Unit: Count
+      Tags:
+      - Key: Name
+        Value: !Sub '${LoadBalancerName}-4XX-COUNT-TARGET-CRITICAL-ALARM'
+
+  ASGNetworkInWarning:
+    Conditon: WantNetworkAlarms
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AutoScalingGroupName}-NETWORK-IN-WARNING'
+      AlarmDescription: !Sub "${AutoScalingGroupName} NetworkIn Warning greater than ${ASGNetworkInWarningThreshold} for 5 minutes"
+      AlarmActions: 
+        - !Ref SNSTopicARNWarning   
+      Namespace: 'AWS/EC2'
+      MetricName: 'NetworkIn'
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroupName
+      Period: '60'
+      DatapointsToAlarm: '5'
+      EvaluationPeriods: '5'
+      Threshold:
+        Ref: ASGNetworkInWarningThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Statistic: Average
+      Tags:
+      - Key: Name
+        Value: !Sub '${AutoScalingGroupName}-NETWORK-IN-WARNING'
+
+#ASG Scaling policy target tracking policy
+  ASGScalingPolicyCpuUtilization: 
+    Type: AWS::AutoScaling::ScalingPolicy
+    Condition: TargetScalingPolicy 
+    Properties:
+      AutoScalingGroupName:
+        Ref: AutoScalingGroupName
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 90
+  ASGUpPolicyCPUUtilization:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Condition: StepScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroupName 
+      PolicyType: StepScaling
+      StepAdjustments:
+      - ScalingAdjustment: 1
+        MetricIntervalLowerBound: 0
+  ASGDownPolicyCPUUtilization:
+    Condition: StepScalingPolicy
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroupName 
+      PolicyType: StepScaling
+      StepAdjustments:
+      - ScalingAdjustment: -1
+        MetricIntervalLowerBound: 0
