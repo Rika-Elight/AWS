@@ -8,3 +8,4 @@ Parameters:
   AutoScalingGroupName: CF-Dev-Testing
   PolicyType: StepScaling
   LoadBalancerName: app/CF-Dev-my-alb/34fbb1ceae84f2da
+  WantNetworkAlarms: "No"
