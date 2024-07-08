@@ -1,10 +1,3 @@
-template-file-path: ./Template/CreateASG.yaml
-Parameters:
-  ProjectName: CF
-  Environment: Dev
-  SNSTopicNameCritical: arn:aws:sns:ap-south-1:317185619046:CF-Dev-test
-  SNSTopicARNWarning: arn:aws:sns:ap-south-1:317185619046:CF-Dev-Warn
-  SNSTopicNameLow: arn:aws:sns:ap-south-1:317185619046:CF-Dev-Low
-  AutoScalingGroupName: CF-Dev-Testing
-  PolicyType: StepScaling
-  LoadBalancerName: app/CF-Dev-my-alb/34fbb1ceae84f2da
+template-file-path: Template/CreateAutoscalingAlarms.yaml
+parameters: {}
+tags: {}
