@@ -685,7 +685,7 @@ Resources:
         Value: !Sub '${LoadBalancerName}-4XX-COUNT-TARGET-CRITICAL-ALARM'
 
   ASGNetworkInWarning:
-    Conditon: WantNetworkAlarms
+    Condition: WantNetworkAlarms
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${AutoScalingGroupName}-NETWORK-IN-WARNING'
