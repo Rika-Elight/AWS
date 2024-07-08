@@ -1,4 +1,4 @@
-template-file-path: ./Template/CreateASG.yaml
+template-file-path: ./Template/CreateAutoscalingAlarms.yaml
 Parameters:
   ProjectName: CF
   Environment: Dev
