@@ -150,7 +150,7 @@ Parameters:
   WantNetworkAlarms:
     Type: String
     Description: Want network alarms ?
-    Default: No
+    Default: "No"
     AllowedValues:
      - "Yes"
      - "No"
